@@ -1,0 +1,281 @@
+
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PHPType - Typing Practice</title>
+<style>
+* { box-sizing: border-box; }
+body {
+  margin: 0; background: #111214; color: #d1d0c5;
+  font-family: Consolas, monospace; padding: 30px 20px;
+}
+main { max-width: 900px; margin: auto; }
+header { display:flex; justify-content:space-between; align-items:center; }
+.logo { font-size:26px; font-weight:bold; }
+.logo span { color:#e2b714; }
+h1 { font-size:30px; margin-top:55px; }
+.muted { color:#777; }
+.controls { display:flex; gap:10px; flex-wrap:wrap; margin:25px 0; }
+button, select {
+  padding:10px 14px; background:#222328; color:#ddd;
+  border:1px solid #393a40; border-radius:6px; cursor:pointer;
+}
+button.active, button:hover { color:#e2b714; border-color:#e2b714; }
+.stats { display:grid; grid-template-columns:repeat(4,1fr); gap:12px; }
+.stat { background:#1a1b20; padding:15px; border-radius:8px; }
+.label { color:#888; font-size:12px; }
+.value { color:#e2b714; font-size:26px; margin-top:5px; }
+.editor {
+  margin-top:20px; padding:20px; background:#1a1b20;
+  border:1px solid #303137; border-radius:10px;
+}
+.editor-head { color:#888; font-size:12px; margin-bottom:20px; }
+#code {
+  font-size:16px; line-height:2; white-space:pre-wrap;
+  overflow-wrap:anywhere; min-height:180px;
+}
+.char.correct { color:#a3e635; }
+.char.incorrect { color:#ff647c; background:#48242c; }
+.char.current { border-left:2px solid #e2b714; }
+#typing {
+  position:absolute; opacity:0; width:1px; height:1px;
+}
+.hint { margin-top:12px; font-size:12px; color:#888; }
+kbd { background:#292a30; padding:5px 8px; border-radius:4px; }
+footer { color:#777; text-align:center; margin-top:35px; font-size:12px; }
+@media(max-width:550px) {
+  .stats { grid-template-columns:repeat(2,1fr); }
+  h1 { font-size:25px; }
+  #code { font-size:14px; }
+}
+</style>
+</head>
+<body>
+<main>
+<header>
+  <div class="logo"><span>&lt;?php</span>Type.</div>
+  <button id="restart">↻ Restart</button>
+</header>
+
+<h1>Type PHP. Build muscle memory.</h1>
+<p class="muted">Latihan mengetik syntax PHP dengan 10 jari.</p>
+
+<div class="controls" id="durations">
+  <button data-time="15">15s</button>
+  <button data-time="30" class="active">30s</button>
+  <button data-time="60">60s</button>
+  <button data-time="120">120s</button>
+  <select id="level">
+    <option value="0">Beginner</option>
+    <option value="1">Intermediate</option>
+    <option value="2">Advanced</option>
+  </select>
+</div>
+
+<section class="stats">
+  <div class="stat"><div class="label">WPM</div><div class="value" id="wpm">0</div></div>
+  <div class="stat"><div class="label">ACCURACY</div><div class="value" id="accuracy">100%</div></div>
+  <div class="stat"><div class="label">TIME LEFT</div><div class="value" id="time">30s</div></div>
+  <div class="stat"><div class="label">ERRORS</div><div class="value" id="errors">0</div></div>
+</section>
+
+<section class="editor" id="editor">
+  <div class="editor-head">● practice.php — PHPType</div>
+  <div id="code"></div>
+  <textarea id="typing" spellcheck="false" autocomplete="off"></textarea>
+  <div class="hint" id="status">Klik area kode untuk mulai mengetik.</div>
+</section>
+
+<p class="hint">Tip: fokus pada akurasi. Jangan melihat keyboard saat mengetik.</p>
+<footer>PHPType · Code your speed.</footer>
+</main>
+
+<script>
+const snippets = [
+`<?php
+$name = "Budi";
+$age = 20;
+
+echo "Hello, " . $name;
+
+if ($age >= 18) {
+    echo "Adult";
+} else {
+    echo "Minor";
+}
+?>`,
+`<?php
+$fruits = ["Apple", "Mango", "Orange"];
+
+foreach ($fruits as $fruit) {
+    echo $fruit . PHP_EOL;
+}
+?>`,
+`<?php
+function calculateTotal($price, $qty) {
+    return $price * $qty;
+}
+
+$total = calculateTotal(25000, 3);
+echo $total;
+?>`,
+`<?php
+$user = [
+    "name" => "Budi",
+    "email" => "budi@example.com",
+    "active" => true,
+];
+
+echo $user["name"];
+?>`,
+`<?php
+class User {
+    public function __construct(
+        public string $name
+    ) {}
+
+    public function greet(): string {
+        return "Hello, " . $this->name;
+    }
+}
+?>`
+];
+
+const code = document.getElementById("code");
+const input = document.getElementById("typing");
+const $ = id => document.getElementById(id);
+
+let duration = 30;
+let remaining = 30;
+let target = "";
+let typed = "";
+let started = false;
+let ended = false;
+let timer = null;
+let errors = 0;
+let attempts = 0;
+let correct = 0;
+let snippetIndex = 0;
+
+function chooseSnippet() {
+  const level = Number($("level").value);
+  const ranges = [[0,1],[2,3],[4,4]][level];
+  const choices = snippets.slice(ranges[0], ranges[1] + 1);
+  return choices[Math.floor(Math.random() * choices.length)];
+}
+
+function render() {
+  code.innerHTML = "";
+  for (let i = 0; i < target.length; i++) {
+    const span = document.createElement("span");
+    span.textContent = target[i];
+    span.className = "char";
+    if (i < typed.length) {
+      span.classList.add(typed[i] === target[i] ? "correct" : "incorrect");
+    }
+    if (i === typed.length && !ended) span.classList.add("current");
+    code.appendChild(span);
+  }
+}
+
+function reset() {
+  clearInterval(timer);
+  timer = null;
+  duration = Number(document.querySelector("#durations .active").dataset.time);
+  remaining = duration;
+  target = chooseSnippet();
+  typed = "";
+  started = false;
+  ended = false;
+  errors = 0;
+  attempts = 0;
+  correct = 0;
+  input.value = "";
+  $("time").textContent = remaining + "s";
+  $("status").textContent = "Klik area kode untuk mulai mengetik.";
+  updateStats();
+  render();
+  input.focus();
+}
+
+function start() {
+  if (started || ended) return;
+  started = true;
+  $("status").textContent = "Typing...";
+  timer = setInterval(() => {
+    remaining--;
+    $("time").textContent = remaining + "s";
+    updateStats();
+    if (remaining <= 0) {
+      ended = true;
+      clearInterval(timer);
+      $("status").textContent = "Selesai! Klik Restart untuk mencoba lagi.";
+      render();
+    }
+  }, 1000);
+}
+
+function updateStats() {
+  const elapsed = duration - remaining;
+  $("wpm").textContent = elapsed > 0
+    ? Math.round((correct / 5) / (elapsed / 60)) : 0;
+  $("accuracy").textContent = attempts
+    ? Math.round(correct / attempts * 100) + "%" : "100%";
+  $("errors").textContent = errors;
+}
+
+input.addEventListener("input", () => {
+  if (ended) return;
+
+  const value = input.value;
+  if (value.length > typed.length) {
+    if (!started) start();
+    for (let i = typed.length; i < value.length; i++) {
+      attempts++;
+      if (value[i] === target[i]) correct++;
+      else errors++;
+    }
+  }
+
+  typed = value;
+
+  if (typed.length >= target.length) {
+    if (typed === target) {
+      // Lanjut ke snippet lain tanpa menghentikan timer.
+      target = chooseSnippet();
+      typed = "";
+      input.value = "";
+      $("status").textContent = "Mantap! Lanjut snippet berikutnya.";
+    } else {
+      $("status").textContent = "Periksa karakter merah dan perbaiki.";
+    }
+  }
+
+  render();
+  updateStats();
+});
+
+input.addEventListener("keydown", e => {
+  if (e.key === "Tab") e.preventDefault();
+});
+input.addEventListener("paste", e => e.preventDefault());
+$("editor").addEventListener("click", () => input.focus());
+$("restart").addEventListener("click", reset);
+$("level").addEventListener("change", reset);
+
+$("durations").addEventListener("click", e => {
+  const btn = e.target.closest("[data-time]");
+  if (!btn) return;
+  document.querySelectorAll("#durations button")
+    .forEach(b => b.classList.remove("active"));
+  btn.classList.add("active");
+  reset();
+});
+
+reset();
+</script>
+</body>
+</html>
+
